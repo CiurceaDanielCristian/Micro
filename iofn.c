@@ -33,7 +33,7 @@ unsigned char rd_LCDreg(unsigned char vRS){
    nop;
    setbit(PORTB,E);
    nop;nop;nop;nop;nop;
-   data=PORTD;
+   data=PIND;
    clrbit(PORTB,E);
    nop;
    DDRD=0b11111111;
