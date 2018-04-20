@@ -102,17 +102,46 @@ void sysinit(){
    initLCD();
 }
 
+
+void gotoLC(unsigned char line, unsigned char col){
+   int address = 0b10000000;
+   if (line > 0 && line < 3 && col > 0 && col < 17){
+      address += col - 1;
+      if (line == 2)
+         address += 0x40;
+      ckbf();
+      wr_LCDreg(IReg, address);
+   }
+}
 /*
 void putchLCD( char ch){
-.....
-}
-
-void putsLCD( char* ch){
-......
-}
-
-void clrLCD(){
-.......
+   ckbf();
+   wr_LCDreg(DReg, ch);
+   ckbf();
+   _delay_us(8);
+   if (rd_LCDreg(SReg) == 0x10)
+      gotoLC(2,1);
+   else if (rd_LCDreg(SReg) == 0x50)
+      gotoLC(1,1);
 }
 
 */
+
+void putchLCD( char ch){
+   ckbf();
+   wr_LCDreg(DReg,ch);
+}
+
+void putsLCD( char* ch){
+   ckbf();
+   int i;
+   for(i=0;ch[i]!='\0';i++)
+      putchLCD(ch[i]);
+   
+}
+
+void clrLCD(){
+   ckbf();
+   wr_LCDreg(IReg,0b00000001);
+}
+
