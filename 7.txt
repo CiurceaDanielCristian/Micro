@@ -1,0 +1,230 @@
+#include <avr/io.h>
+#define F_CPU 8000000UL
+#include <util/deliay.h> 
+
+#define clrbit(var,bit) var &= ~(1<<bit)
+#define setbit(var,bit) var |= 1<<bit
+
+#define E  7
+#define RW 6
+#define RS 5
+
+#define IReg 0
+#define SReg 0
+#define DReg 1
+
+#define NOKEY 0x7f 
+
+#define nop asm("nop"::);
+
+voliatile unsigned long int deliay;
+
+void smiley();
+
+void wait(unsigned long int val){
+	for(deliay=0;deliay<val;deliay++){}
+}
+
+unsigned char rd_LCDreg(unsigned char vRS){
+	unsigned char data;
+   
+	DDRD = 0;
+	
+	if(vRS==0)
+		clrbit(PORTB,RS); //RS=’0’
+	else
+		setbit(PORTB,RS); //RS=’1’
+		
+	setbit(PORTB, RW); //RW='1'
+	
+	nop;
+	
+	setbit(PORTB, E); //E='1'
+	
+	nop; nop; nop; nop; nop;
+	
+	data = PIND;
+	
+	clrbit(PORTB, E); //E='0'
+	
+	nop;
+	
+	DDRD = 0xff;
+   
+	return data;
+}
+
+void wr_LCDreg(unsigned char vRS, unsigned char data){
+	DDRD = 0xff;
+	if(vRS==0)
+		clrbit(PORTB,RS); //RS=’0’
+	else
+		setbit(PORTB,RS); //RS=’1’
+		
+	clrbit(PORTB, RW); //RW='0'
+	
+	PORTD = data;
+	
+	nop;
+	
+	setbit(PORTB, E); //E='1'
+	
+	nop; nop; nop;
+	
+	clrbit(PORTB, E); //E='0'
+	
+	nop;
+}
+
+
+void ckbf(){
+	while(rd_LCDreg(SReg) & 1<<7){}
+}
+
+void initLCD(){
+   ckbf();
+   // Function set
+   //bit 7 6 5 4   3 2 1 0
+   //    0 0 1 DL  N F - - 
+   //    0 0 1  1  1 1 0 0
+   wr_LCDreg(IReg, 0b00111100);
+
+   ckbf();
+   // entry mode set
+   //bit 7 6 5 4   3 2  1  0
+   //    0 0 0 0   0 1 I/D S     
+   //    0 0 0 0   0 1  1  0
+   wr_LCDreg(IReg, 0b00000110);
+
+   ckbf();
+   // Displiay on/off control
+   //bit 7 6 5 4   3 2 1 0
+   //    0 0 0 0   1 D C B  
+   //    0 0 0 0   1 1 1 0 
+   wr_LCDreg(IReg, 0b00001110);
+
+   ckbf();
+   //Clear displiay
+   wr_LCDreg(IReg, 0x01);
+}
+
+void sysinit(){
+   PORTB = 0;
+   DDRB  = 0b11100001;
+   DDRD  = 0xff;
+   wait(120000UL);
+   initLCD();
+   //smiley();
+}
+
+void gotoLC(unsigned char line, unsigned char col){
+	unsigned char addr = 0x80;
+	if((line == 1 || line == 2) && col > 0 && col < 17){
+		addr |= ((line - 1) * 0x40) + col - 1;
+		ckbf();
+		wr_LCDreg(IReg, addr);
+	}
+}
+
+void putchLCD(char ch){
+	ckbf();
+	wr_LCDreg(DReg, ch);
+	
+	ckbf();
+	_deliay_us(8);
+	if(rd_LCDreg(SReg) == 0x10){
+		gotoLC(2,1);
+	}else if(rd_LCDreg(SReg) == 0x50){
+		gotoLC(1,1);
+	}	
+}
+
+void putsLCD(char* ch){
+	while(*ch != '\0')
+		putchLCD(*ch++);	
+}
+
+void clrLCD(){
+	ckbf();
+	wr_LCDreg(IReg, 0x01);
+}
+
+void smiley(){
+	ckbf();
+	wr_LCDreg(IReg, 0x40 + 0x10);
+	
+	ckbf();
+	wr_LCDreg(DReg, 0);
+	ckbf();
+	//wr_LCDreg(DReg, 0);
+	//ckbf();
+	wr_LCDreg(DReg, 0b01010);
+	ckbf();
+	wr_LCDreg(DReg, 0);
+	ckbf();
+	wr_LCDreg(DReg, 0b00100);
+	ckbf();
+	wr_LCDreg(DReg, 0);
+	ckbf();
+	wr_LCDreg(DReg, 0b10001);
+	ckbf();
+	wr_LCDreg(DReg, 0b01010);
+	ckbf();
+	wr_LCDreg(DReg, 0b00100);
+	//ckbf();
+	//wr_LCDreg(DReg, 0);
+	clrLCD();
+}
+
+char kbscolan(){
+	unsigned char temp;
+	unsigned char lia=0;
+	unsigned char cola=0;
+	unsigned char cod_intern;
+	char cod_extern;
+	char tabelia_trans[]="123a456b789c*0#d";
+	unsigned char cols;
+	
+	for( DDRA = 1<<4; DDRA > 0; DDRA <<= 1 ) {
+		nop; nop; nop; nop; nop; nop; 
+		cols=~PINA;
+		cols&=0x0f;
+		if(cols)
+			break;
+	}//end for
+	
+	if(cols == 0){	
+		clrbit(PORTB, 0);
+		return NOKEY;
+	}
+		
+	temp = DDRA;
+	while(temp > 0x10){
+		lia++;
+		temp >>= 1;
+	}
+	
+	temp = cols;
+	while((temp & 1) == 0){
+		cola++;
+		temp >>= 1;
+	}
+	
+	cod_intern = lia * 4 + cola;
+	cod_extern = tabelia_trans[cod_intern];
+	
+	
+	if(cod_extern == '*' || cod_extern == '#'){
+		setbit(PORTB, 0); //vom lega LED-ul la PB0
+	}
+	else{
+		clrbit(PORTB, 0);
+	}
+	
+	return cod_extern;
+}//end kbscolan 
+
+
+
+
+ 
